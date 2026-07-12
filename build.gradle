@@ -15,6 +15,9 @@ java {
 
 repositories {
 	mavenCentral()
+	// Spring AI milestone repo — needed until Spring AI is fully in Maven Central
+	maven { url 'https://repo.spring.io/milestone' }
+
 }
 
 ext {
@@ -23,10 +26,42 @@ ext {
 
 dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
-	implementation 'org.springframework.ai:spring-ai-starter-model-openai'
+//	implementation 'org.springframework.ai:spring-ai-starter-model-openai'
 	developmentOnly 'org.springframework.boot:spring-boot-devtools'
 	testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+	// ===== SPRING BOOT CORE =====
+	implementation 'org.springframework.boot:spring-boot-starter-web'
+	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+	// Required by the pgvector starter even when using JPA (known Spring AI dependency gap)
+	implementation 'org.springframework.boot:spring-boot-starter-jdbc'
+
+	// ===== SPRING AI — OLLAMA (LOCAL, FREE) =====
+	// Chat completions + embeddings via a locally running Ollama instance.
+	// Zero API cost — everything runs on your own machine.
+	implementation 'org.springframework.ai:spring-ai-starter-model-ollama'
+
+	// ===== SPRING AI — VECTOR STORE =====
+	// PGVector: stores and searches embedding vectors in PostgreSQL
+	implementation 'org.springframework.ai:spring-ai-starter-vector-store-pgvector'
+
+	// ===== SPRING AI — DOCUMENT READERS =====
+	// PDF reader: converts PDF bytes → Spring AI Document objects
+	implementation 'org.springframework.ai:spring-ai-pdf-document-reader'
+
+	// ===== DATABASE =====
+	runtimeOnly 'org.postgresql:postgresql'
+
+	// ===== UTILITIES =====
+	compileOnly 'org.projectlombok:lombok'
+	annotationProcessor 'org.projectlombok:lombok'
+
+	// ===== TEST =====
+	testImplementation 'org.springframework.boot:spring-boot-starter-test'
+
+	// ADD this line alongside the existing ollama dependency
+	implementation 'org.springframework.ai:spring-ai-starter-model-openai'
+
 }
 
 dependencyManagement {
