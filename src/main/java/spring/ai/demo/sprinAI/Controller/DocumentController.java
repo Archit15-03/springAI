@@ -10,18 +10,12 @@ import spring.ai.demo.sprinAI.Service.DocumentIngestionService;
 import java.io.IOException;
 import java.util.Map;
 
-/**
- * Layer 1 — Upload endpoint
- *
- * POST /api/documents/upload
- *   multipart/form-data  →  { file: <pdf> }
- *   returns              →  { message, filename, chunksStored }
- */
+
 @Slf4j
 @RestController
 @RequestMapping("/api/documents")
 @RequiredArgsConstructor
-//@CrossOrigin(origins = "http://localhost:3000") // React dev server
+//@CrossOrigin(origins = "http://localhost:3000")
 public class DocumentController {
 
     private final DocumentIngestionService ingestionService;

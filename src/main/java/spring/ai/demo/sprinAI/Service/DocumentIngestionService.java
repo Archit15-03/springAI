@@ -29,11 +29,9 @@ public class DocumentIngestionService {
     private static final int MIN_CHUNK_SIZE_CHARS = 350;
 
     /**
-     * Ingests a PDF file into the vector store.
      *
      * @param file     the uploaded PDF
-     * @param filename original filename — stored as metadata so the frontend
-     *                 can show "answer sourced from: contract.pdf, page 4"
+     * @param filename
      * @return number of chunks stored
      */
     public int ingestDocument(MultipartFile file, String filename) throws IOException {

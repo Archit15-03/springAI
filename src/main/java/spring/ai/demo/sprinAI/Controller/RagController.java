@@ -8,19 +8,12 @@ import spring.ai.demo.sprinAI.Service.RagService;
 import spring.ai.demo.sprinAI.Models.AskRequest;
 import spring.ai.demo.sprinAI.Models.AskResponse;
 
-/**
- * Layer 2 — Question answering endpoint
- *
- * POST /api/rag/ask
- *   { "question": "What is the payment amount?" }
- *   →
- *   { "answer": "...", "sources": [ { "sourceFile": "...", "snippet": "...", "score": 0.91 } ] }
- */
+
 @Slf4j
 @RestController
 @RequestMapping("/api/rag")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "http://localhost:3000") // React dev server
+@CrossOrigin(origins = "http://localhost:3000")
 public class RagController {
 
     private final RagService ragService;
