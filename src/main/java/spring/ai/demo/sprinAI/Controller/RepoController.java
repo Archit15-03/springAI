@@ -21,7 +21,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/repo")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "http://localhost:3000")
+@CrossOrigin(origins = "http://localhost:4200")
 public class RepoController {
 
     private final RepoIngestionService repoIngestionService;
@@ -65,8 +65,8 @@ public class RepoController {
     @GetMapping("/status/{jobId}")
     public ResponseEntity<?> status(@PathVariable UUID jobId) {
         Optional<RepoJob> jobResponse = repoJobRepository.findById(jobId);
-        if(jobResponse.isPresent() &&
-                (jobResponse.get().getStatus().equals(RepoJob.JobStatus.PENDING) || jobResponse.get().getStatus().equals(RepoJob.JobStatus.FAILED))) asyncService.processAsync(jobId);
+//        if(jobResponse.isPresent() &&
+//                jobResponse.get().getStatus().equals(RepoJob.JobStatus.PENDING)) asyncService.processAsync(jobId);
         return jobResponse
                 .map(job -> ResponseEntity.ok(Map.of(
                         "jobId",          job.getId().toString(),

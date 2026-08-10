@@ -13,7 +13,7 @@ import spring.ai.demo.sprinAI.Models.AskResponse;
 @RestController
 @RequestMapping("/api/rag")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "http://localhost:3000")
+@CrossOrigin(origins = "http://localhost:4200")
 public class RagController {
 
     private final RagService ragService;

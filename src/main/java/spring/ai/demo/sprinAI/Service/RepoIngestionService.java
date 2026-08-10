@@ -85,10 +85,11 @@ public class RepoIngestionService {
 
             String latestHash = gitService.getLatestCommitHash(repoUrl, branch);
             if (latestHash != null &&
-                    latestHash.equals(job.getLastCommitHash()) &&
-                    job.getStatus() == JobStatus.DONE) {
+                    latestHash.equals(job.getLastCommitHash()) /*&&
+                    job.getStatus() == JobStatus.DONE*/) {
 
                 log.info("Repo {}/{} already up to date at {}", repoUrl, branch, latestHash);
+                updateStatus(job, JobStatus.DONE, null);
                 return;
             }
 

@@ -13,7 +13,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/agent")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "http://localhost:3000")
+@CrossOrigin(origins = "http://localhost:4200")
 public class AgentController {
 
     private final AgentService agentService;

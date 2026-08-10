@@ -1,6 +1,7 @@
 package spring.ai.demo.sprinAI.Repository;
 
 
+import jakarta.transaction.Transactional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -32,11 +33,13 @@ public interface CodeGraphRepository extends JpaRepository<CodeGraphNode, UUID> 
     List<CodeGraphNode> findCallers(String repoUrl, String branch, String nodeName);
 
     // Delete all nodes for a specific file — used during incremental sync
+    @Transactional
     @Modifying
     @Query("DELETE FROM CodeGraphNode c WHERE c.repoUrl = :repoUrl AND c.branch = :branch AND c.filePath = :filePath")
     void deleteByRepoUrlAndBranchAndFilePath(String repoUrl, String branch, String filePath);
 
     // Delete all nodes for a repo+branch — used on full re-ingest
+    @Transactional
     @Modifying
     @Query("DELETE FROM CodeGraphNode c WHERE c.repoUrl = :repoUrl AND c.branch = :branch")
     void deleteByRepoUrlAndBranch(String repoUrl, String branch);
