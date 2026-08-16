@@ -128,6 +128,7 @@ public class GraphRagService {
             }
         }
 
+        log.info("Just before finding  {}",nodeName);
         List<CodeGraphNode> callers =
                 codeGraphRepository.findCallers(repoUrl, branch, nodeName);
         for (CodeGraphNode caller : callers) {

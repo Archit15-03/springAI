@@ -6,9 +6,13 @@ import org.springframework.ai.document.Document;
 import org.springframework.ai.transformer.splitter.TokenTextSplitter;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import spring.ai.demo.sprinAI.Entity.CodeGraphNode;
 import spring.ai.demo.sprinAI.Entity.RepoJob;
 import spring.ai.demo.sprinAI.Entity.RepoJob.JobStatus;
@@ -32,6 +36,7 @@ public class RepoIngestionService {
     private final CodeGraphRepository  codeGraphRepository;
     private final RepoJobRepository    repoJobRepository;
     private final VectorStore          vectorStore;
+    private final JdbcTemplate         jdbcTemplate;
 
     @Autowired
     private AsyncService asyncService;
@@ -216,4 +221,36 @@ public class RepoIngestionService {
         repoJobRepository.save(job);
         log.info("Job {} status → {}", job.getId(), status);
     }
+
+    @Transactional
+    public ResponseEntity<?> deleteRepo(@PathVariable UUID jobId) {
+        return repoJobRepository.findById(jobId).map(job -> {
+
+            String repoUrl = job.getRepoUrl();
+            String branch  = job.getBranch();
+
+            // 1. Delete code graph nodes
+            codeGraphRepository.deleteByRepoUrlAndBranch(repoUrl, branch);
+
+            // 2. Delete vector store chunks for this repo
+            jdbcTemplate.update("""
+                DELETE FROM vector_store
+                WHERE metadata->>'repo_url' = ?
+                AND metadata->>'branch' = ?
+                """, repoUrl, branch);
+
+            // 3. Delete the job itself
+            repoJobRepository.delete(job);
+
+            log.info("Deleted repo {}/{}", repoUrl, branch);
+
+            return ResponseEntity.ok(Map.of(
+                    "message", "Repository deleted successfully",
+                    "repoUrl", repoUrl,
+                    "branch",  branch
+            ));
+
+        }).orElse(ResponseEntity.notFound().build());
+    }
+
 }

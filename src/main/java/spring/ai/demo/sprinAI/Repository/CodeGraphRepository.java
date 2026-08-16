@@ -24,11 +24,19 @@ public interface CodeGraphRepository extends JpaRepository<CodeGraphNode, UUID> 
             String repoUrl, String branch, String filePath);
 
     // Find all nodes that call a specific function — used for graph traversal
+//    @Query(value = """
+//        SELECT * FROM code_graph
+//        WHERE repo_url = :repoUrl
+//        AND branch = :branch
+//        AND calls::jsonb @> CAST(CONCAT('["', :nodeName, '"]') AS jsonb)
+//        """, nativeQuery = true)
+//    List<CodeGraphNode> findCallers(String repoUrl, String branch, String nodeName);
+
     @Query(value = """
         SELECT * FROM code_graph 
         WHERE repo_url = :repoUrl 
         AND branch = :branch 
-        AND calls::jsonb @> CAST(CONCAT('["', :nodeName, '"]') AS jsonb)
+        AND calls::text LIKE '%"' || :nodeName || '"%'
         """, nativeQuery = true)
     List<CodeGraphNode> findCallers(String repoUrl, String branch, String nodeName);
 

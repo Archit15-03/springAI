@@ -77,6 +77,7 @@ public class RepoController {
                         "processedFiles", job.getProcessedFiles(),
                         "lastCommitHash", job.getLastCommitHash() != null ? job.getLastCommitHash() : "",
                         "updatedAt",      job.getUpdatedAt().toString(),
+                        "createdAt",      job.getCreatedAt().toString(),
                         "errorMessage",   job.getErrorMessage() != null ? job.getErrorMessage() : ""
                 )))
                 .orElse(ResponseEntity.notFound().build());
@@ -139,4 +140,14 @@ public class RepoController {
                         .toList()
         );
     }
+
+    /**
+     * DELETE /api/repo/{jobId}
+     * Deletes everything for this repo — code_graph nodes + vector_store chunks + job entry.
+     */
+    @DeleteMapping("/{jobId}")
+    public ResponseEntity<?> deleteRepo(@PathVariable UUID jobId) {
+        return repoIngestionService.deleteRepo(jobId);
+    }
+
 }

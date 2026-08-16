@@ -43,6 +43,7 @@ public class TreeSitterService {
         List<CodeGraphNode> nodes = new ArrayList<>();
 
         TSLanguage language = getLanguageForFile(filePath);
+        log.info("The returnd language type is {}",language.toString());
         if (language == null) {
             log.debug("Skipping unsupported file type: {}", filePath);
             return nodes;
@@ -55,7 +56,7 @@ public class TreeSitterService {
             TSTree tree = parser.parseString(null, fileContent);
             TSNode root = tree.getRootNode();
 
-            List<String> imports = extractImports(root, fileContent);
+            List<String> imports = extractImports(root, fileContent,filePath);
 
             extractClasses(root, fileContent, filePath, repoUrl, branch, imports, nodes);
 
@@ -71,16 +72,45 @@ public class TreeSitterService {
     }
 
 
-    private List<String> extractImports(TSNode root, String source) {
+    private List<String> extractImports(TSNode root, String source, String filePath) {
         List<String> imports = new ArrayList<>();
-        traverseForType(root, "import_declaration", node -> {
-            String importText = getNodeText(node, source);
-            String[] parts = importText.replace("import", "").replace(";", "").trim().split("\\.");
-            if (parts.length > 0) {
-                imports.add(parts[parts.length - 1].trim());
-            }
-        });
+
+        if (filePath.endsWith(".py")) {
+            // Python: import os, from os import path
+            traverseForType(root, "import_statement", node -> {
+                String text = getNodeText(node, source);
+                extractLastIdentifier(text, imports);
+            });
+            traverseForType(root, "import_from_statement", node -> {
+                String text = getNodeText(node, source);
+                extractLastIdentifier(text, imports);
+            });
+        } else {
+            // Java, JS, TS: import_declaration
+            traverseForType(root, "import_declaration", node -> {
+                String text = getNodeText(node, source);
+                extractLastIdentifier(text, imports);
+            });
+        }
+
         return imports;
+    }
+
+    private void extractLastIdentifier(String importText, List<String> imports) {
+        if (importText == null) return;
+        String cleaned = importText
+                .replace("import", "").replace("from", "")
+                .replace(";", "").replace("*", "")
+                .replace("{", "").replace("}", "")
+                .trim();
+        String[] parts = cleaned.split("[,\\s./]+");
+        for (String part : parts) {
+            String trimmed = part.trim();
+            if (!trimmed.isBlank() && trimmed.length() < 100
+                    && !trimmed.equals("as") && !trimmed.equals("default")) {
+                imports.add(trimmed);
+            }
+        }
     }
 
     private void extractClasses(TSNode root, String source, String filePath,
@@ -123,6 +153,28 @@ public class TreeSitterService {
                     .endLine(node.getEndPoint().getRow() + 1)
                     .build());
         });
+
+        // Python: class declaration uses same node type name but different child structure
+// tree-sitter-python uses "class_definition" not "class_declaration"
+        if (filePath.endsWith(".py")) {
+            traverseForType(root, "class_definition", node -> {
+                String className = getChildByFieldName(node, "name", source);
+                if (className == null || className.isBlank()) return;
+
+                nodes.add(CodeGraphNode.builder()
+                        .repoUrl(repoUrl)
+                        .branch(branch)
+                        .filePath(filePath)
+                        .nodeName(className)
+                        .nodeType(CodeGraphNode.NodeType.CLASS)
+                        .imports(toJsonArray(imports))
+                        .calls("[]")
+                        .tags(inferTags(className, filePath))
+                        .startLine(node.getStartPoint().getRow() + 1)
+                        .endLine(node.getEndPoint().getRow() + 1)
+                        .build());
+            });
+        }
     }
 
     private void extractMethods(TSNode root, String source, String filePath,
@@ -130,13 +182,13 @@ public class TreeSitterService {
                                 List<String> imports, List<CodeGraphNode> nodes) {
 
         for (String methodType : getMethodNodeTypes(filePath)) {
-            traverseForType(root, "method_declaration", node -> {
-                String methodName = getChildByFieldName(node, "name", source);
+            traverseForType(root, methodType, node -> {
+                String methodName = extractMethodName(node, source, filePath);
                 if (methodName == null || methodName.isBlank()) return;
 
-                List<String> calls = extractMethodCalls(node, source);
+                List<String> calls = extractMethodCalls(node, source, filePath);
 
-                CodeGraphNode graphNode = CodeGraphNode.builder()
+                nodes.add(CodeGraphNode.builder()
                         .repoUrl(repoUrl)
                         .branch(branch)
                         .filePath(filePath)
@@ -147,27 +199,95 @@ public class TreeSitterService {
                         .tags(inferTags(methodName, filePath))
                         .startLine(node.getStartPoint().getRow() + 1)
                         .endLine(node.getEndPoint().getRow() + 1)
-                        .build();
-
-                nodes.add(graphNode);
+                        .build());
             });
         }
     }
 
-    private List<String> extractMethodCalls(TSNode methodNode, String source) {
-        List<String> calls = new ArrayList<>();
-        traverseForType(methodNode, "method_invocation", callNode -> {
-            String callText = getNodeText(callNode, source);
-            if (callText.contains("(")) {
-                String beforeParen = callText.substring(0, callText.indexOf("("));
-                String[] parts = beforeParen.split("\\.");
-                String calledMethod = parts[parts.length - 1].trim();
-                if (!calledMethod.isBlank()) {
-                    calls.add(calledMethod);
+    /**
+     * Extracts the name of a function/method node.
+     * Each language stores the name differently in the AST:
+     *
+     * Java:   method_declaration → name field → identifier
+     * Python: function_definition → name field → identifier
+     * JS/TS:  function_declaration → name field → identifier
+     *         arrow_function → no name field → look at parent variable_declarator
+     *         method_definition → first property_identifier or identifier child
+     */
+    private String extractMethodName(TSNode node, String source, String filePath) {
+
+        // Strategy 1: standard "name" field — works for Java, Python, JS function_declaration
+        String name = getChildByFieldName(node, "name", source);
+        if (name != null && !name.isBlank()) return name.trim();
+
+        // Strategy 2: JS/TS arrow function — name lives on parent variable_declarator
+        // e.g. const processPayment = (amount) => { ... }
+        //      variable_declarator
+        //        name: identifier → "processPayment"   ← what we want
+        //        value: arrow_function                  ← current node
+        if (node.getParent() != null) {
+            TSNode parent = node.getParent();
+            if ("variable_declarator".equals(parent.getType())) {
+                name = getChildByFieldName(parent, "name", source);
+                if (name != null && !name.isBlank()) return name.trim();
+            }
+        }
+
+        // Strategy 3: JS/TS method_definition — name is a property_identifier or identifier child
+        // e.g. class Foo { processPayment(amount) { ... } }
+        //      method_definition
+        //        property_identifier → "processPayment"  ← what we want
+        for (int i = 0; i < node.getChildCount(); i++) {
+            TSNode child = node.getChild(i);
+            String childType = child.getType();
+            if ("property_identifier".equals(childType) || "identifier".equals(childType)) {
+                String text = getNodeText(child, source);
+                if (text != null && !text.isBlank() && text.length() < 100) {
+                    return text.trim();
                 }
             }
+        }
+
+        return null;
+    }
+
+    private List<String> extractMethodCalls(TSNode methodNode, String source, String filePath) {
+        List<String> calls = new ArrayList<>();
+
+        // Each language uses a different node type for function/method calls
+        String callNodeType = getCallNodeType(filePath);
+
+        traverseForType(methodNode, callNodeType, callNode -> {
+            try {
+                String callText = getNodeText(callNode, source);
+                if (callText == null || !callText.contains("(")) return;
+
+                String beforeParen = callText.substring(0, callText.indexOf("(")).trim();
+                if (beforeParen.isBlank()) return;
+
+                // Extract just the method name — handle chained calls like obj.method()
+                String[] parts = beforeParen.split("[.\\s]");
+                String calledMethod = parts[parts.length - 1].trim();
+
+                // Sanity check — skip empty, too long, or obviously not a method name
+                if (!calledMethod.isBlank()
+                        && calledMethod.length() < 100
+                        && !calledMethod.contains("(")
+                        && !calledMethod.contains("{")) {
+                    calls.add(calledMethod);
+                }
+            } catch (Exception e) {
+                log.info("Skip malformed nodes");
+            }
         });
+
         return calls;
+    }
+
+    private String getCallNodeType(String filePath) {
+        if (filePath.endsWith(".py"))  return "call";            // Python: call
+        if (filePath.endsWith(".java")) return "method_invocation"; // Java: method_invocation
+        return "call_expression";                                // JS, TS: call_expression
     }
 
     private String inferTags(String name, String filePath) {
